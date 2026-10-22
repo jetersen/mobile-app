@@ -461,4 +461,6 @@
   <string name="unsupported_install_description">This server is not installed through one of the supported installation methods. Some features may not work as expected, and issues reported from it may be closed without support.</string>
   <string name="unsupported_install_link">Installation methods</string>
   <string name="unsupported_install_title">Unsupported installation</string>
+  <string name="action_share_link">Share link</string>
+  <string name="action_share_provider_link">Share %1$s link</string>
 </resources>

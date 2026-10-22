@@ -109,6 +109,7 @@ import io.music_assistant.client.ui.compose.common.dynamicColorsMenuOption
 import io.music_assistant.client.ui.compose.common.icons.VolumeIcon
 import io.music_assistant.client.ui.compose.common.icons.VolumeMutedIcon
 import io.music_assistant.client.ui.compose.common.ignoreDragsFromBottomGestureZone
+import io.music_assistant.client.ui.compose.common.items.ProviderShareButton
 import io.music_assistant.client.ui.compose.common.items.navigationOptions
 import io.music_assistant.client.ui.compose.common.rememberAnimatedPlayerColors
 import io.music_assistant.client.ui.compose.common.rememberDynamicColorsEnabled
@@ -590,20 +591,25 @@ private fun ExpandedPlayerPage(
                 )
             },
             end = {
-                PlayerOverflowMenu(
-                    currentPlayer = player,
-                    allPlayers = allPlayers,
-                    playerAction = { playerAction(player, it) },
-                    queueAction = queueAction,
-                    navigateToItem = navigateAndClose,
-                    onPlayerSelected = { moveToPlayer(it) },
-                    onOpenDsp = onDspButton,
-                    onAnnounce = onAnnounceButton,
-                    onAmbientSound = onAmbientSoundButton,
-                    onAddToPlaylist = onAddToPlaylist,
-                    queueDjMenu = queueDjMenu,
-                    onQueueDjSelected = onQueueDjSelected,
-                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    (player.queueInfo?.currentItem?.track as? AppMediaItem)?.let {
+                        ProviderShareButton(it)
+                    }
+                    PlayerOverflowMenu(
+                        currentPlayer = player,
+                        allPlayers = allPlayers,
+                        playerAction = { playerAction(player, it) },
+                        queueAction = queueAction,
+                        navigateToItem = navigateAndClose,
+                        onPlayerSelected = { moveToPlayer(it) },
+                        onOpenDsp = onDspButton,
+                        onAnnounce = onAnnounceButton,
+                        onAmbientSound = onAmbientSoundButton,
+                        onAddToPlaylist = onAddToPlaylist,
+                        queueDjMenu = queueDjMenu,
+                        onQueueDjSelected = onQueueDjSelected,
+                    )
+                }
             },
         )
 

@@ -78,6 +78,7 @@ import io.music_assistant.client.ui.compose.common.items.ItemAction
 import io.music_assistant.client.ui.compose.common.items.LibraryActions
 import io.music_assistant.client.ui.compose.common.items.LocalClickActionConfig
 import io.music_assistant.client.ui.compose.common.items.PlaylistActions
+import io.music_assistant.client.ui.compose.common.items.ProviderShareButton
 import io.music_assistant.client.ui.compose.common.items.localizedSubtitle
 import io.music_assistant.client.ui.compose.common.items.navigationOptions
 import io.music_assistant.client.ui.compose.common.items.rememberArtistNavigation
@@ -241,6 +242,7 @@ internal fun ItemTopBar(
                         }
                     }
 
+                    ProviderShareButton(item)
                     ItemOverflow(
                         item = item,
                         libraryActions = libraryActions,
