@@ -14,10 +14,10 @@ import platform.UIKit.UIWindowScene
 import platform.UIKit.popoverPresentationController
 
 @Composable
-actual fun rememberShareProviderLink(): (url: String, title: String) -> Unit = remember {
+actual fun rememberShareItem(): (SharePayload) -> Unit = remember {
     {
-        url, _ ->
-        NSURL.URLWithString(url)?.let { shareUrl ->
+        payload ->
+        (if (payload.isUrl) NSURL.URLWithString(payload.value) else payload.value)?.let { shareValue ->
             val root = UIApplication.sharedApplication.connectedScenes
                 .filterIsInstance<UIWindowScene>()
                 .flatMap { it.windows.filterIsInstance<UIWindow>() }
@@ -27,7 +27,7 @@ actual fun rememberShareProviderLink(): (url: String, title: String) -> Unit = r
                 while (true) {
                     presenter = presenter.presentedViewController ?: break
                 }
-                val activity = UIActivityViewController(listOf(shareUrl), null)
+                val activity = UIActivityViewController(listOf(shareValue), null)
                 activity.popoverPresentationController?.let { popover ->
                     popover.sourceView = presenter.view
                     popover.sourceRect = presenter.view.bounds.useContents {

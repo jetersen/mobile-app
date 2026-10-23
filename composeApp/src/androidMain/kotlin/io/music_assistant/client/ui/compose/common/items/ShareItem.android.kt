@@ -6,17 +6,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 
 @Composable
-actual fun rememberShareProviderLink(): (url: String, title: String) -> Unit {
+actual fun rememberShareItem(): (SharePayload) -> Unit {
     val context = LocalContext.current
     return remember(context) {
         {
-            url, title ->
+            payload ->
             val intent = Intent(Intent.ACTION_SEND).apply {
                 type = "text/plain"
-                putExtra(Intent.EXTRA_TEXT, url)
-                putExtra(Intent.EXTRA_SUBJECT, title)
+                putExtra(Intent.EXTRA_TEXT, payload.value)
+                putExtra(Intent.EXTRA_SUBJECT, payload.title)
             }
-            context.startActivity(Intent.createChooser(intent, title))
+            context.startActivity(Intent.createChooser(intent, payload.title))
         }
     }
 }

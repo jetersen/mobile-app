@@ -2,23 +2,27 @@ package io.music_assistant.client.ui.compose.common.items
 
 import android.content.ContextWrapper
 import android.content.Intent
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.junit4.v2.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithText
-import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.core.content.IntentCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
-import io.music_assistant.client.data.model.client.AppMediaItemFixtures
-import io.music_assistant.client.data.model.server.ProviderMapping
+import io.music_assistant.client.data.model.server.ServerShareItem
+import io.music_assistant.client.data.model.server.ServerShareLink
+import io.music_assistant.client.ui.compose.common.OverflowMenuButton
+import io.music_assistant.client.ui.compose.common.OverflowMenuOption
+import kotlinx.coroutines.CompletableDeferred
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -30,125 +34,155 @@ import kotlin.test.assertTrue
 class ProviderShareButtonTest {
     @get:Rule
     val composeTestRule = createComposeRule()
+    private val intents = mutableListOf<Intent>()
+    private var requests = 0
+    private val uri = mutableStateOf("library://track/42")
+    private var hold: CompletableDeferred<Unit>? = null
+    private var cancelled = 0
 
     @Test
-    fun `sharing is hidden when provider mappings are absent`() {
-        val item = AppMediaItemFixtures.track().copy(providerMappings = null)
-
-        composeTestRule.setContent { ProviderShareButton(item) }
-
-        composeTestRule.onNodeWithContentDescription("Share link").assertDoesNotExist()
-    }
-
-    @Test
-    fun `sharing is hidden when no provider has a usable public link`() {
-        val item = AppMediaItemFixtures.track().copy(
-            providerMappings = listOf(
-                mapping("ytmusic", null),
-                mapping("spotify", ""),
-                mapping("other", "other://track/123"),
-                mapping("filesystem_local", "https://example.com/music/123.flac"),
-            ),
-        )
-
-        composeTestRule.setContent { ProviderShareButton(item) }
-
-        composeTestRule.onNodeWithContentDescription("Share link").assertDoesNotExist()
-    }
-
-    @Test
-    fun `sharing is visible for another provider when youtube has no link`() {
-        val item = AppMediaItemFixtures.track().copy(
-            providerMappings = listOf(
-                mapping("ytmusic", null),
-                mapping("spotify", "https://open.spotify.com/track/123"),
-            ),
-        )
-
-        composeTestRule.setContent { ProviderShareButton(item) }
-
-        composeTestRule.onNodeWithContentDescription("Share link").assertIsDisplayed()
-    }
-
-    @Test
-    fun `sharing disappears when the public link is removed`() {
-        var item by mutableStateOf(
-            AppMediaItemFixtures.track().copy(
-                providerMappings = listOf(mapping("spotify", "https://open.spotify.com/track/123")),
-            ),
-        )
-        composeTestRule.setContent { ProviderShareButton(item) }
-        composeTestRule.onNodeWithContentDescription("Share link").assertIsDisplayed()
-
+    fun `item change cancels loading and discards the old response`() {
+        hold = CompletableDeferred()
+        menu(ServerShareItem("Song", "Song by Artist", emptyList()))
+        composeTestRule.onNodeWithText("More").performClick()
+        composeTestRule.onNodeWithText("Loading sharing options…").assertIsNotEnabled()
+        composeTestRule.runOnIdle { uri.value = "library://track/43" }
+        composeTestRule.onNodeWithText("Share").assertIsDisplayed()
         composeTestRule.runOnIdle {
-            item = item.copy(providerMappings = listOf(mapping("spotify", null)))
+            assertEquals(1, cancelled)
+            assertEquals(2, requests)
         }
-
-        composeTestRule.onNodeWithContentDescription("Share link").assertDoesNotExist()
+        composeTestRule.onNodeWithText("Share").performClick()
+        assertPayload("Song by Artist")
     }
 
     @Test
-    fun `choosing youtube from multiple providers shares its link`() {
-        assertProviderChoiceShares("Share YouTube Music link", "https://music.youtube.com/watch?v=123")
+    fun `share is inside overflow and loads once per opening`() {
+        menu(ServerShareItem("Song", null, listOf(link("spotify", "https://example.com/song"))))
+        composeTestRule.onNodeWithText("Share").assertDoesNotExist()
+        composeTestRule.runOnIdle { assertEquals(0, requests) }
+        composeTestRule.onNodeWithText("More").performClick()
+        composeTestRule.onNodeWithText("Share").assertIsDisplayed().performClick()
+        assertPayload("https://example.com/song")
+        composeTestRule.runOnIdle { assertEquals(1, requests) }
+        composeTestRule.onNodeWithText("More").performClick()
+        composeTestRule.onNodeWithText("Share").assertIsDisplayed()
+        composeTestRule.runOnIdle { assertEquals(2, requests) }
     }
 
     @Test
-    fun `choosing spotify from multiple providers shares its link`() {
-        assertProviderChoiceShares("Share spotify link", "https://open.spotify.com/track/123")
-    }
-
-    private fun assertProviderChoiceShares(choice: String, expectedUrl: String) {
-        val item = AppMediaItemFixtures.track().copy(
-            providerMappings = listOf(
-                mapping("ytmusic", "https://music.youtube.com/watch?v=123"),
-                mapping("spotify", "https://open.spotify.com/track/123"),
-                mapping("ytmusic", "https://music.youtube.com/watch?v=123")
-                    .copy(providerInstance = "ytmusic--other-account"),
-                mapping("other", null),
+    fun `provider picker uses friendly names and shares only chosen URL`() {
+        menu(
+            ServerShareItem(
+                "Song",
+                null,
+                listOf(
+                    link("spotify", "https://example.com/spotify"),
+                    link("ytmusic", "https://example.com/youtube"),
+                ),
             ),
         )
-        val startedIntents = mutableListOf<Intent>()
+        composeTestRule.onNodeWithText("More").performClick()
+        composeTestRule.onNodeWithText("Share").performClick()
+        composeTestRule.onNodeWithText("Share Spotify link").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Share YouTube Music link").performClick()
+        assertPayload("https://example.com/youtube")
+    }
+
+    @Test
+    fun `local fallback shares only server text`() {
+        menu(ServerShareItem("Song", "Song by Artist", emptyList()))
+        composeTestRule.onNodeWithText("More").performClick()
+        composeTestRule.onNodeWithText("Share").performClick()
+        assertPayload("Song by Artist")
+    }
+
+    @Test
+    fun `failed response does not expose raw item URI`() {
+        menu(null)
+        composeTestRule.onNodeWithText("More").performClick()
+        composeTestRule.onNodeWithText("Sharing unavailable").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Share").assertDoesNotExist()
+        composeTestRule.runOnIdle { assertTrue(intents.isEmpty()) }
+    }
+
+    @Test
+    fun `dismiss while loading cancels request without sharing`() {
+        hold = CompletableDeferred()
+        menu(ServerShareItem("Song", "Song by Artist", emptyList()))
+        composeTestRule.onNodeWithText("More").performClick()
+        composeTestRule.onNodeWithText("Loading sharing options…").assertIsNotEnabled()
+        composeTestRule.onNodeWithText("Other action").performClick()
+        composeTestRule.runOnIdle {
+            assertEquals(1, cancelled)
+            assertTrue(intents.isEmpty())
+        }
+        composeTestRule.onNodeWithText("Share").assertDoesNotExist()
+    }
+
+    @Test
+    fun `cancel provider picker does not share`() {
+        menu(
+            ServerShareItem(
+                "Song",
+                null,
+                listOf(
+                    link("spotify", "https://example.com/a"),
+                    link("ytmusic", "https://example.com/b"),
+                ),
+            ),
+        )
+        composeTestRule.onNodeWithText("More").performClick()
+        composeTestRule.onNodeWithText("Share").performClick()
+        composeTestRule.onNodeWithText("Cancel").performClick()
+        composeTestRule.onNodeWithText("Share Spotify link").assertDoesNotExist()
+        composeTestRule.runOnIdle { assertTrue(intents.isEmpty()) }
+    }
+
+    private fun menu(response: ServerShareItem?) {
         composeTestRule.setContent {
             val baseContext = LocalContext.current
             val context = remember(baseContext) {
                 object : ContextWrapper(baseContext) {
-                    override fun startActivity(intent: Intent) {
-                        startedIntents.add(intent)
-                    }
+                    override fun startActivity(intent: Intent) { intents.add(intent) }
                 }
             }
             CompositionLocalProvider(LocalContext provides context) {
-                ProviderShareButton(item)
+                var active by remember { mutableStateOf(false) }
+                val options = shareMenuOptions(uri.value, active, load = { requestedUri ->
+                    requests++
+                    if (requestedUri == "library://track/42") {
+                        try {
+                            hold?.await()
+                        } finally {
+                            if (hold?.isCompleted == false) cancelled++
+                        }
+                    }
+                    response
+                }, providerName = { _, domain ->
+                    mapOf("spotify" to "Spotify", "ytmusic" to "YouTube Music").getValue(domain)
+                })
+                OverflowMenuButton(
+                    options = options + OverflowMenuOption("Other action", onClick = {}),
+                    onExpandedChange = { active = it },
+                ) { onClick ->
+                    BasicText("More", Modifier.clickable(onClick = onClick))
+                }
             }
-        }
-
-        composeTestRule.onNodeWithContentDescription("Share link").performClick()
-
-        composeTestRule.onAllNodesWithText("Share YouTube Music link").assertCountEquals(1)
-        composeTestRule.onNodeWithText("Share YouTube Music link").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Share spotify link").assertIsDisplayed()
-        composeTestRule.onNodeWithText("Share other link").assertDoesNotExist()
-        composeTestRule.runOnIdle { assertTrue(startedIntents.isEmpty()) }
-
-        composeTestRule.onNodeWithText(choice).performClick()
-
-        composeTestRule.runOnIdle {
-            val chooser = startedIntents.single()
-            assertEquals(Intent.ACTION_CHOOSER, chooser.action)
-            val sendIntent = assertNotNull(
-                IntentCompat.getParcelableExtra(chooser, Intent.EXTRA_INTENT, Intent::class.java),
-            )
-            assertEquals(Intent.ACTION_SEND, sendIntent.action)
-            assertEquals("text/plain", sendIntent.type)
-            assertEquals(expectedUrl, sendIntent.getStringExtra(Intent.EXTRA_TEXT))
-            assertEquals(item.name, sendIntent.getStringExtra(Intent.EXTRA_SUBJECT))
         }
     }
 
-    private fun mapping(provider: String, url: String?) = ProviderMapping(
-        itemId = "123",
-        providerDomain = provider,
-        providerInstance = "$provider--account",
-        url = url,
-    )
+    private fun assertPayload(expected: String) {
+        composeTestRule.runOnIdle {
+            val chooser = intents.single()
+            assertEquals(Intent.ACTION_CHOOSER, chooser.action)
+            val send = assertNotNull(IntentCompat.getParcelableExtra(chooser, Intent.EXTRA_INTENT, Intent::class.java))
+            assertEquals(Intent.ACTION_SEND, send.action)
+            assertEquals("text/plain", send.type)
+            assertEquals(expected, send.getStringExtra(Intent.EXTRA_TEXT))
+            assertEquals("Song", send.getStringExtra(Intent.EXTRA_SUBJECT))
+        }
+    }
+
+    private fun link(domain: String, url: String) = ServerShareLink(domain, "$domain--account", url)
 }

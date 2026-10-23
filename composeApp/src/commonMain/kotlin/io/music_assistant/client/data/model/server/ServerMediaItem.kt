@@ -117,7 +117,7 @@ data class ProviderMapping(
     @SerialName("provider_instance") val providerInstance: String,
 //    @SerialName("available") val available: Boolean,
 //    @SerialName("audio_format") val audioFormat: AudioFormat? = null,
-    @SerialName("url") val url: String? = null,
+//    @SerialName("url") val url: String? = null,
 //    @SerialName("details") val details: String?
 )
 

@@ -78,11 +78,11 @@ import io.music_assistant.client.ui.compose.common.items.ItemAction
 import io.music_assistant.client.ui.compose.common.items.LibraryActions
 import io.music_assistant.client.ui.compose.common.items.LocalClickActionConfig
 import io.music_assistant.client.ui.compose.common.items.PlaylistActions
-import io.music_assistant.client.ui.compose.common.items.ProviderShareButton
 import io.music_assistant.client.ui.compose.common.items.localizedSubtitle
 import io.music_assistant.client.ui.compose.common.items.navigationOptions
 import io.music_assistant.client.ui.compose.common.items.rememberArtistNavigation
 import io.music_assistant.client.ui.compose.common.items.resolveDetailOverflowActions
+import io.music_assistant.client.ui.compose.common.items.shareMenuOptions
 import io.music_assistant.client.ui.compose.common.items.toOverflowOption
 import io.music_assistant.client.ui.compose.common.painters.rememberPlaceholderPainter
 import io.music_assistant.client.ui.compose.common.providers.ProviderIconFetcher
@@ -242,7 +242,6 @@ internal fun ItemTopBar(
                         }
                     }
 
-                    ProviderShareButton(item)
                     ItemOverflow(
                         item = item,
                         libraryActions = libraryActions,
@@ -266,6 +265,8 @@ private fun ItemOverflow(
     onSimilarArtistsClick: () -> Unit,
     onLyricsClick: (() -> Unit)?,
 ) {
+    var shareActive by remember { mutableStateOf(false) }
+    val shareOptions = shareMenuOptions(item.uri, shareActive)
     var showPlaylistDialog by rememberSaveable { mutableStateOf(false) }
     var showRemoveConfirmation by remember { mutableStateOf(false) }
 
@@ -312,7 +313,8 @@ private fun ItemOverflow(
         }
     }
     OverflowMenuButton(
-        options = canonical + item.navigationOptions(navigateToItem, containerItem = item) + similarArtists +
+        onExpandedChange = { shareActive = it },
+        options = shareOptions + canonical + item.navigationOptions(navigateToItem, containerItem = item) + similarArtists +
             lyrics + dynamicColorsMenuOption(),
     ) { onClick ->
         IconButton(onClick = onClick) {
