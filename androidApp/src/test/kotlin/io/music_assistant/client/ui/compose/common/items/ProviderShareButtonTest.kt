@@ -12,10 +12,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.click
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTouchInput
 import androidx.core.content.IntentCompat
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import io.music_assistant.client.data.model.server.ServerShareItem
@@ -26,6 +30,8 @@ import kotlinx.coroutines.CompletableDeferred
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.RuntimeEnvironment
+import org.robolectric.annotation.Config
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
@@ -90,6 +96,38 @@ class ProviderShareButtonTest {
     }
 
     @Test
+    @Config(qualifiers = "w640dp-h360dp-land")
+    fun `long provider picker can cancel and share last link in landscape with large text`() {
+        RuntimeEnvironment.setFontScale(2f)
+        val providerNames = (1..20).associate { "provider$it" to "Music service $it" }
+        menu(
+            ServerShareItem(
+                "Song",
+                null,
+                providerNames.keys.map { link(it, "https://example.com/$it") },
+            ),
+            providerNames,
+        )
+
+        composeTestRule.onNodeWithText("More").performClick()
+        composeTestRule.onNodeWithText("Share").performClick()
+        val lastProvider = composeTestRule.onNodeWithText("Share Music service 20 link")
+        lastProvider.assertIsNotDisplayed()
+        composeTestRule.onNodeWithText("Cancel").assertIsDisplayed()
+        lastProvider.performScrollTo().assertIsDisplayed()
+        composeTestRule.onNodeWithText("Share").assertIsDisplayed()
+        composeTestRule.onNodeWithText("Cancel").assertIsDisplayed().performTouchInput { click() }
+        lastProvider.assertDoesNotExist()
+        composeTestRule.runOnIdle { assertTrue(intents.isEmpty()) }
+
+        composeTestRule.onNodeWithText("More").performClick()
+        composeTestRule.onNodeWithText("Share").performClick()
+        lastProvider.performScrollTo().assertIsDisplayed().performTouchInput { click() }
+        assertPayload("https://example.com/provider20")
+        composeTestRule.onNodeWithText("Cancel").assertDoesNotExist()
+    }
+
+    @Test
     fun `local fallback shares only server text`() {
         menu(ServerShareItem("Song", "Song by Artist", emptyList()))
         composeTestRule.onNodeWithText("More").performClick()
@@ -139,7 +177,10 @@ class ProviderShareButtonTest {
         composeTestRule.runOnIdle { assertTrue(intents.isEmpty()) }
     }
 
-    private fun menu(response: ServerShareItem?) {
+    private fun menu(
+        response: ServerShareItem?,
+        providerNames: Map<String, String> = mapOf("spotify" to "Spotify", "ytmusic" to "YouTube Music"),
+    ) {
         composeTestRule.setContent {
             val baseContext = LocalContext.current
             val context = remember(baseContext) {
@@ -160,7 +201,7 @@ class ProviderShareButtonTest {
                     }
                     response
                 }, providerName = { _, domain ->
-                    mapOf("spotify" to "Spotify", "ytmusic" to "YouTube Music").getValue(domain)
+                    providerNames.getValue(domain)
                 })
                 OverflowMenuButton(
                     options = options + OverflowMenuOption("Other action", onClick = {}),
