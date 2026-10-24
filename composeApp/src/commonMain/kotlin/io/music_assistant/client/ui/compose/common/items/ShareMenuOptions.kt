@@ -53,11 +53,12 @@ fun shareMenuOptions(
     uri: String?,
     active: Boolean,
 ): List<OverflowMenuOption> {
+    if (uri.isNullOrBlank()) return emptyList()
     if (LocalInspectionMode.current || !LocalGrantedScopes.current.has(Scope.LIBRARY_READ)) return emptyList()
     val repository = koinInject<ShareRepository>()
-    val providers = koinViewModel<ProviderViewModel>()
     val session by repository.sessionState.collectAsStateWithLifecycle()
     if (!session.supportsSharing()) return emptyList()
+    val providers = koinViewModel<ProviderViewModel>()
     return key(session) {
         shareMenuOptions(uri, active, repository::shareItem) { instance, domain ->
             providers.getProviderDetails(instance)?.name ?: providers.getProviderDetails(domain)?.name ?: domain

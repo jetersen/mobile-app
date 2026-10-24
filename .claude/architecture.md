@@ -122,8 +122,9 @@ actual class PlatformFeature {
   rejects a field that the list does not offer, so resolve the stored choice with
   `LibrarySortMenu.resolve` before the request. Send a sort only as a `ListSort`. The sub-item lists (album
   tracks, playlist tracks, episodes, artist lists) keep `SortConfig` and sort on the client.
-- **Sharing**: details and expanded-player overflow menus load `music/share_item` through
-  `ShareRepository` only while open, on schema 100 or newer. The server alone chooses public
+- **Sharing**: details, expanded-player and individual queue-item overflow menus load `music/share_item`
+  through `ShareRepository` only while open, with `library.read` on schema 100 or newer. Queue items
+  share their underlying media URI, including the station URI for radio. The server alone chooses public
   provider URLs or a plain-text fallback. Never derive share URLs from media mappings or metadata.
   Multiple links open a provider picker; native sharing receives only the selected URL or fallback text.
 - **Providers**: `ProviderRepository` (`data/repository/`) owns the `providers` list. Read

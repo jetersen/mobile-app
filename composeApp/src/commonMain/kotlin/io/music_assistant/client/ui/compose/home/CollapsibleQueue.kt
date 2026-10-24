@@ -41,6 +41,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -66,15 +67,16 @@ import io.music_assistant.client.data.model.client.items.Track
 import io.music_assistant.client.data.model.client.items.image
 import io.music_assistant.client.imageloader.rememberArtworkRequest
 import io.music_assistant.client.ui.compose.common.DataState
+import io.music_assistant.client.ui.compose.common.MenuItem
 import io.music_assistant.client.ui.compose.common.NoOverscroll
 import io.music_assistant.client.ui.compose.common.action.QueueAction
 import io.music_assistant.client.ui.compose.common.icons.PlayIcon
 import io.music_assistant.client.ui.compose.common.icons.TrackIcon
 import io.music_assistant.client.ui.compose.common.items.DISABLED_ITEM_ALPHA
 import io.music_assistant.client.ui.compose.common.items.localizedSubtitle
+import io.music_assistant.client.ui.compose.common.items.shareMenuOptions
 import io.music_assistant.client.ui.compose.common.painters.rememberPlaceholderPainter
 import io.music_assistant.client.ui.contentColorByLuminance
-import io.music_assistant.client.utils.conditional
 import io.music_assistant.client.utils.formatDuration
 import kotlinx.coroutines.flow.Flow
 import musicassistantclient.composeapp.generated.resources.Res
@@ -269,7 +271,15 @@ fun Queue(
                     // correct across consecutive drags.
                     var dragStartIndex by remember { mutableStateOf<Int?>(null) }
                     var dragEndIndex by remember { mutableStateOf<Int?>(null) }
-                    var menuItemId by remember { mutableStateOf<String?>(null) }
+                    // Keep the selection after closing the menu so the share picker can stay open.
+                    var menuItemId by remember(queueData.info.id) { mutableStateOf<String?>(null) }
+                    var menuExpanded by remember(queueData.info.id) { mutableStateOf(false) }
+                    val shareOptions = key(queueData.info.id, menuItemId) {
+                        shareMenuOptions(
+                            uri = (internalItems.firstOrNull { it.id == menuItemId }?.track as? AppMediaItem)?.uri,
+                            active = menuExpanded && isCurrentPage && isQueueExpanded,
+                        )
+                    }
                     val listState = rememberLazyListState()
 
                     // Flattened rows: real queue items, plus chapter rows under the
@@ -409,33 +419,20 @@ fun Queue(
                                             )
                                             .fillMaxWidth()
                                             .clip(shape = RoundedCornerShape(8.dp))
-                                            .conditional(
-                                                condition = isPlayed,  // Treat unplayable like played items
-                                                ifTrue = {
-                                                    clickable(isPlayable) {  // Only clickable if playable
+                                            .combinedClickable(
+                                                onClick = {
+                                                    if (!isCurrent && isPlayable) {
                                                         queueAction(
                                                             QueueAction.PlayQueueItem(
-                                                                queueData.info.id, item.id,
+                                                                queueData.info.id,
+                                                                item.id,
                                                             ),
                                                         )
                                                     }
                                                 },
-                                                ifFalse = {
-                                                    combinedClickable(
-                                                        onClick = {
-                                                            if (!isCurrent && isPlayable) {
-                                                                queueAction(
-                                                                    QueueAction.PlayQueueItem(
-                                                                        queueData.info.id,
-                                                                        item.id,
-                                                                    ),
-                                                                )
-                                                            }
-                                                        },
-                                                        onLongClick = {
-                                                            menuItemId = item.id
-                                                        },
-                                                    )
+                                                onLongClick = {
+                                                    menuItemId = item.id
+                                                    menuExpanded = true
                                                 },
                                             )
                                             .padding(horizontal = 12.dp, vertical = 2.dp),
@@ -528,11 +525,12 @@ fun Queue(
                                     // Long-click menu
                                     DropdownMenu(
                                         modifier = Modifier.queueMenuHeight(),
-                                        expanded = menuItemId == item.id,
-                                        onDismissRequest = { menuItemId = null },
+                                        expanded = menuExpanded && menuItemId == item.id &&
+                                            (!isPlayed || shareOptions.isNotEmpty()),
+                                        onDismissRequest = { menuExpanded = false },
                                     ) {
                                         val track = item.track as? Track
-                                        if (track != null && onAddToPlaylist != null) {
+                                        if (!isPlayed && track != null && onAddToPlaylist != null) {
                                             DropdownMenuItem(
                                                 text = {
                                                     Text(stringResource(Res.string.action_add_to_playlist))
@@ -545,28 +543,33 @@ fun Queue(
                                                 },
                                                 onClick = {
                                                     onAddToPlaylist(track)
-                                                    menuItemId = null
+                                                    menuExpanded = false
                                                 },
                                             )
                                         }
-                                        DropdownMenuItem(
-                                            text = { Text(stringResource(Res.string.common_delete)) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = Icons.Default.Delete,
-                                                    contentDescription = null,
-                                                )
-                                            },
-                                            onClick = {
-                                                queueAction(
-                                                    QueueAction.RemoveItems(
-                                                        queueData.info.id,
-                                                        listOf(item.id),
-                                                    ),
-                                                )
-                                                menuItemId = null
-                                            },
-                                        )
+                                        if (!isPlayed) {
+                                            DropdownMenuItem(
+                                                text = { Text(stringResource(Res.string.common_delete)) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Delete,
+                                                        contentDescription = null,
+                                                    )
+                                                },
+                                                onClick = {
+                                                    queueAction(
+                                                        QueueAction.RemoveItems(
+                                                            queueData.info.id,
+                                                            listOf(item.id),
+                                                        ),
+                                                    )
+                                                    menuExpanded = false
+                                                },
+                                            )
+                                        }
+                                        shareOptions.forEach { option ->
+                                            option.MenuItem { menuExpanded = false }
+                                        }
                                     }
                                 }
                             }
